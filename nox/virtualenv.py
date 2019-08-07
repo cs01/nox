@@ -16,6 +16,7 @@ import os
 import platform
 import re
 import shutil
+import subprocess
 import sys
 
 import py
@@ -212,6 +213,33 @@ class VirtualEnv(ProcessEnv):
 
         Based heavily on tox's implementation (tox/interpreters.py).
         """
+
+        try:
+            # instead of using the python in a virtualenv,
+            # determine path of python on the system that was *used* to
+            # create the virtualenv. This is required to create a venv
+            # with python on travis.
+            # full working implementation in tox here:
+            # https://github.com/tox-dev/tox-venv/blob/master/src/tox_venv/hooks.py
+            output = subprocess.check_output(
+                ["python", "-c", "import sys; print(sys.real_prefix)"],
+                stderr=subprocess.STDOUT,
+            )
+            prefix = os.path.join(output.decode("UTF-8").strip(), "bin")
+            interpreter = (
+                self.interpreter
+                if self.interpreter
+                else f"{sys.version_info.major}.{sys.version_info.minor}"
+            )
+            python_str = f"python{interpreter}"  # i.e. python3.6
+            for p in os.listdir(prefix):
+                if p.endswith(python_str):
+                    return os.path.join(prefix, p)
+            raise InterpreterNotFound(interpreter)
+        except subprocess.CalledProcessError:
+            # process fails, implies *not* in active virtualenv
+            pass
+
         # If there is no assigned interpreter, then use the same one used by
         # Nox.
         if isinstance(self._resolved, Exception):
@@ -282,13 +310,10 @@ class VirtualEnv(ProcessEnv):
             )
             return False
 
-        cmd = [sys.executable, "-m", "virtualenv", self.location]
-
-        if self.interpreter:
-            cmd.extend(["-p", self._resolved_interpreter])
+        cmd = [sys._resolved_interpreter, "-m", "venv", self.location]
 
         logger.info(
-            "Creating virtualenv using {} in {}".format(
+            "Creating venv using {} in {}".format(
                 os.path.basename(self._resolved_interpreter), self.location_name
             )
         )
