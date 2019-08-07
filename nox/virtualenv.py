@@ -310,7 +310,7 @@ class VirtualEnv(ProcessEnv):
             )
             return False
 
-        cmd = [sys._resolved_interpreter, "-m", "venv", self.location]
+        cmd = [self._resolved_interpreter, "-m", "venv", self.location]
 
         logger.info(
             "Creating venv using {} in {}".format(
